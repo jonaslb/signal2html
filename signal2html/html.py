@@ -60,7 +60,7 @@ def dump_thread(thread, output_dir):
     # Get thread name and determine if group
     thread_name = thread.recipient.name[0].strip()
     is_group = False
-    if thread.recipient.recipientId._id.startswith("__textsecure_group__"):
+    if thread.recipient.isgroup:
         is_group = True
 
     # Create the message color CSS (depends on individuals)
@@ -72,7 +72,7 @@ def dump_thread(thread, output_dir):
         colors_used = []
         group_colors = set(ar.color for ar in sender_idx)
         for ar, idx in sender_idx.items():
-            if ar.recipientId._id.startswith("__textsecure_group__"):
+            if ar.isgroup:
                 continue
             # ensure colors are unique, even if they're not in Signal
             ar_color = ar.color
@@ -180,7 +180,7 @@ def dump_thread(thread, output_dir):
     )
 
     filename = os.path.join(
-        output_dir, thread_name.replace(" ", "_") + ".html"
+        output_dir, thread.recipient.name.replace(" ", "_") + ".html"
     )
     with open(filename, "w") as fp:
         fp.write(html)

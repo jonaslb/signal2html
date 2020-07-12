@@ -37,42 +37,41 @@ def check_backup(backup_dir):
 
     # We have only ever seen database version 23, so we don't proceed if it's
     # not that. Testing and pull requests welcome.
+    # However, this is the ghetto-adaptation for version 65 / jonaslb
     version = version_str.split(":")[-1].strip()
-    if not version == "23":
+    if not version == "65":
         warnings.warn(
             f"Warning: Found untested Signal database version: {version}."
         )
 
 
-def get_color(db, recipient_id):
-    """ Extract recipient color from the database """
-    query = db.execute(
-        "SELECT color FROM recipient_preferences WHERE recipient_ids=?",
-        (recipient_id,),
-    )
-    color = query.fetchone()[0]
-    return color
-
-
 def make_recipient(db, recipient_id):
     """ Create a Recipient instance from a given recipient id """
-    if recipient_id.startswith("__textsecure_group__"):
-        qry = db.execute(
-            "SELECT title FROM groups WHERE group_id=?", (recipient_id,)
-        )
-        label = qry.fetchone()
-    else:
-        qry = db.execute(
-            "SELECT system_display_name FROM recipient_preferences WHERE recipient_ids=?",
-            (recipient_id,),
-        )
-        label = qry.fetchone()
+    qry = db.execute(
+        "SELECT group_id, system_display_name, profile_joined_name, color from recipient where _id=?", (recipient_id,)
+    )
+    groupid, name, joined_name, color = qry.fetchone()
 
-    label = (recipient_id,) if label[0] is None else label
-    color = get_color(db, recipient_id)
+    if color is None:
+        from .html_colors import COLORMAP
+        from random import choice as rchoice
+        color = rchoice(list(COLORMAP.keys()))
+
+    isgroup = groupid is not None
+
+    if isgroup:
+        qry = db.execute(
+            "SELECT title FROM groups WHERE group_id=?", (groupid,)
+        )
+        name = qry.fetchone()[0]
+
+    if name is None:
+        if joined_name is None:
+            raise ValueError(f"Could not find a name for recipient id {recipient_id}")
+        name = joined_name
 
     rid = RecipientId(recipient_id)
-    return Recipient(rid, name=label, color=color)
+    return Recipient(rid, name=name, color=color, isgroup=isgroup)
 
 
 def get_sms_records(db, thread):
@@ -152,7 +151,7 @@ def get_mms_records(db, thread, recipients, backup_dir):
         quote = None
         if quote_id:
             quote_auth = next(
-                (r for r in recipients if r.recipientId._id == quote_author),
+                (r for r in recipients if str(r.recipientId._id) == str(quote_author)),
                 None,
             )
             if not quote_auth:
